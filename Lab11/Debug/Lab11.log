@@ -1,0 +1,6 @@
+﻿  Lab11.cpp
+C:\Users\osipy\source\repos\Lab11\Lab11\Lab11.cpp(122,53): warning C4305: '-=': truncation from 'double' to 'float'
+C:\Users\osipy\source\repos\Lab11\Lab11\Lab11.cpp(123,53): warning C4305: '+=': truncation from 'double' to 'float'
+C:\Users\osipy\source\repos\Lab11\Lab11\Lab11.cpp(124,53): warning C4305: '+=': truncation from 'double' to 'float'
+C:\Users\osipy\source\repos\Lab11\Lab11\Lab11.cpp(125,53): warning C4305: '-=': truncation from 'double' to 'float'
+  Lab11.vcxproj -> C:\Users\osipy\source\repos\Lab11\Debug\Lab11.exe
