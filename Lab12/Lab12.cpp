@@ -1,4 +1,4 @@
-// Lab12.cpp : This file contains the 'main' function. Program execution begins and ends there.
+п»ї// Lab12.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
 
 #include <iostream>
@@ -10,90 +10,24 @@
 #include <string>
 #include <fstream>
 #include <sstream>
-struct vec3 {
-    GLfloat x;
-    GLfloat y;
-    GLfloat z;
-public:
-    vec3(GLfloat x, GLfloat y, GLfloat z) {
-        this->x = x;
-        this->y = y;
-        this->z = z;
-    }
-};
-class Mesh {
-public:
-    Mesh();
-    Mesh(std::string mesh_filename, const char* texture_filename = "image.jpg");
 
-    void Draw();
-    void Draw(vec3 lightpos, vec3 view);
-    void IncXPos(float d);
-    void IncYPos(float d);
-    void Release();
-
-private:
-   
-    struct vec2 {
-        GLfloat x;
-        GLfloat y;
-    };
-    struct Vertex {
-        // position
-        vec3 Position;
-        // normal
-        vec3 Normal;
-        // texCoords
-        vec2 TexCoords;
-
-    };
-
-    // ID шейдерной программы
-    GLuint Program;
-
-    // ID атрибута вершин
-    GLint Attrib_vertex;
-
-    // ID атрибута цвета
-    GLint Attrib_color;
-
-    // ID юниформ переменной перемешения
-    GLint Unif_posX;
-    GLint Unif_posY;
-    GLint unifTexture;
-    GLint unifLightPos;
-    GLint unifViewVec;
-    // ID Vertex Buffer Object
-    GLuint VBO;
-    GLuint VAO;
-    GLuint IBO;
-    
-    std::vector<Vertex> vertices;
-    std::vector<vec3> positions;
-    std::vector<vec3> normals;
-    std::vector<vec2> uvs;
-
-    std::vector<unsigned int> indices;
-    // ID текстуры
-    GLint textureHandle;
-    // SFML текстура
-    sf::Texture textureData;
-
-    float posX = 0.0f, posY = 0.0f;
-
-    // Исходный код вершинного шейдера
-    const char* VertexShaderSource = R"(
+#include "Mesh.h"
+int main()
+{
+#pragma region FONG_SHADERS
+    const char* FongVertexShaderSource = R"(
     #version 330 core
     uniform float positX;
     uniform float positY;
-    uniform vec3 lightPos;
-    uniform vec3 view;
 
     layout (location = 0)in vec3 coord;
     layout (location = 1)in vec3 normal;
     layout (location = 2)in vec2 uv;
+
     out vec2 textcoord;
-    out float constant;
+    out vec3 Normal;  
+    out vec3 FragPos;
+
     void main() {       
         float x_angle = 1 + positX;
         float y_angle = 1 + positY;
@@ -120,64 +54,264 @@ private:
         
         gl_Position = vec4(position, 1.0);
         textcoord = uv;
-        constant = dot(normal2,position-view);
+        Normal = normal2;
+        FragPos = position;
     }
     )";
 
-    // Исходный код фрагментного шейдера
-    const char* FragShaderSource = R"(
+    // РСЃС…РѕРґРЅС‹Р№ РєРѕРґ С„СЂР°РіРјРµРЅС‚РЅРѕРіРѕ С€РµР№РґРµСЂР°
+    const char* FongFragShaderSource = R"(
         #version 330 core
+        out vec4 FragColor;
+
         in vec2 textcoord;
-        in float constant;
-        out vec4 color;
+        in vec3 Normal;  
+        in vec3 FragPos;  
+  
+        uniform vec3 lightPos = vec3(0,0,-1); 
+        uniform vec3 view;
         uniform sampler2D textureData;
+
         void main() {
-            color = constant*texture(textureData, textcoord);
+        vec3 lightColor = vec3(1,0.5,0.5);
+        vec3 objectColor = texture(textureData, textcoord).rgb;
+            // ambient
+            float ambient = 0.1;
+            //vec3 ambient = ambientStrength * lightColor;
+  	
+            // diffuse 
+            vec3 norm = normalize(Normal);
+            vec3 lightDir = normalize(lightPos - FragPos);
+            float diffuse = max(dot(norm, lightDir), 0.0);
+            //vec3 diffuse = diff * lightColor;
+    
+            // specular
+            float specularStrength = 0.7;
+            vec3 viewDir = normalize(view - FragPos);
+            vec3 reflectDir = reflect(lightDir, norm);  
+            float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
+            //vec3 specular = specularStrength * spec * lightColor;  
+            //vec3 specular = vec3(0,0,0);
+            float specular = specularStrength * spec ;  
+            vec3 result = (ambient + diffuse + specular) * lightColor * objectColor;
+            FragColor = vec4(result, 1.0);
         }
         )";
-    // Проверка ошибок OpenGL, если есть то вывод в консоль тип ошибки
-    void checkOpenGLerror();
+#pragma endregion
 
-    // Функция печати лога шейдера
-    void ShaderLog(unsigned int shader);
+#pragma region TOON_SHADERS
+    const char* ToonShadingVertexShaderSource = R"(
+    #version 330 core
+    uniform float positX;
+    uniform float positY;
 
-    void InitVBO();
+    layout (location = 0)in vec3 coord;
+    layout (location = 1)in vec3 normal;
+    layout (location = 2)in vec2 uv;
 
-    void InitShader();
+    out vec2 textcoord;
+    out vec3 Normal;  
+    out vec3 FragPos;
 
-    void InitTexture(const char* filename = "image.jpg");
+    void main() {       
+        float x_angle = 1 + positX;
+        float y_angle = 1 + positY;
+        
+        
+        vec3 position = coord * mat3(
+            1, 0, 0,
+            0, cos(x_angle), -sin(x_angle),
+            0, sin(x_angle), cos(x_angle)
+        ) * mat3(
+            cos(y_angle), 0, sin(y_angle),
+            0, 1, 0,
+            -sin(y_angle), 0, cos(y_angle)
+        );
+        vec3 normal2 = normal * mat3(
+            1, 0, 0,
+            0, cos(x_angle), -sin(x_angle),
+            0, sin(x_angle), cos(x_angle)
+        ) * mat3(
+            cos(y_angle), 0, sin(y_angle),
+            0, 1, 0,
+            -sin(y_angle), 0, cos(y_angle)
+        );
+        
+        gl_Position = vec4(position, 1.0);
+        textcoord = uv;
+        Normal = normal2;
+        FragPos = position;
+    }
+    )";
 
-    void Init();
+    // РСЃС…РѕРґРЅС‹Р№ РєРѕРґ С„СЂР°РіРјРµРЅС‚РЅРѕРіРѕ С€РµР№РґРµСЂР°
+    const char* ToonShadingFragShaderSource = R"(
+        #version 330 core
+        out vec4 FragColor;
 
-    // Освобождение шейдеров
-    void ReleaseShader();
+        in vec2 textcoord;
+        in vec3 Normal;  
+        in vec3 FragPos;  
+  
+        uniform vec3 lightPos = vec3(0,0,-1); 
+        uniform vec3 view;
+        uniform sampler2D textureData;
 
-    // Освобождение буфера
-    void ReleaseVBO();
+        void main() {
 
-    void ReadVectorsFromFile(std::string filename);
+            vec4 position = vec4(FragPos,0);
+            float _UnlitOutlineThickness = 0.5;
+            float _LitOutlineThickness = 0.5;
+            vec4 _OutlineColor = vec4(1,1,1,1);
+            vec3 normalDirection = normalize(Normal);
+            float _Shininess = 0.5;
+            vec4 _SpecColor = vec4(0.5,0.5,0.5,1);
+            vec4 _LightColor0 = vec4(1,1,0,1);
+            vec4 _UnlitColor = vec4(1,0,0,1);
+            float _DiffuseThreshold = 0.5;
+            vec4 _Color = texture(textureData, textcoord);
+            vec3 viewDirection = normalize(view);
+            vec3 lightDirection;
+            float attenuation;
+            vec4 _WorldSpaceLightPos0 = vec4(lightPos,0.0);
+            if (0.0 == _WorldSpaceLightPos0.w) // directional light?
+            {
+               attenuation = 1.0; // no attenuation
+               lightDirection = normalize(vec3(_WorldSpaceLightPos0));
+            } 
+            else // point or spot light
+            {
+               vec3 vertexToLightSource = vec3(_WorldSpaceLightPos0 - position);
+               float distance = length(vertexToLightSource);
+               attenuation = 1.0 / distance; // linear attenuation 
+               lightDirection = normalize(vertexToLightSource);
+            }
+            
+            // default: unlit 
+            vec3 fragmentColor = vec3(_UnlitColor); 
+            
+            // low priority: diffuse illumination
+            if (attenuation * max(0.0, dot(normalDirection, lightDirection))  >= _DiffuseThreshold)
+            {
+               fragmentColor = vec3(_LightColor0) * vec3(_Color); 
+            }
+            
+            // higher priority: outline
+            if (dot(viewDirection, normalDirection) 
+               < mix(_UnlitOutlineThickness, _LitOutlineThickness, 
+               max(0.0, dot(normalDirection, lightDirection))))
+            {
+               fragmentColor = 
+                  vec3(_LightColor0) * vec3(_OutlineColor); 
+            }
+            
+            // highest priority: highlights
+            if (dot(normalDirection, lightDirection) > 0.0 
+               // light source on the right side?
+               && attenuation *  pow(max(0.0, dot(
+               reflect(-lightDirection, normalDirection), 
+               viewDirection)), _Shininess) > 0.5) 
+               // more than half highlight intensity? 
+            {
+               fragmentColor = _SpecColor.a 
+                  * vec3(_LightColor0) * vec3(_SpecColor)
+                  + (1.0 - _SpecColor.a) * fragmentColor;
+            }
+ 
+            FragColor = vec4(fragmentColor, 1.0);
+        }
+        )";
+#pragma endregion
 
-    void SetupMesh(std::string filename);
-};
-int main()
-{
+#pragma region BIDIRECTIONAL_LIGHT_SHADERS
+    const char* BiDirectionalVertexShaderSource = R"(
+    #version 330 core
+    uniform float positX;
+    uniform float positY;
+
+    layout (location = 0)in vec3 coord;
+    layout (location = 1)in vec3 normal;
+    layout (location = 2)in vec2 uv;
+
+    out vec2 textcoord;
+    out vec3 Normal;  
+    out vec3 FragPos;
+
+    void main() {       
+        float x_angle = 1 + positX;
+        float y_angle = 1 + positY;
+        
+        
+        vec3 position = coord * mat3(
+            1, 0, 0,
+            0, cos(x_angle), -sin(x_angle),
+            0, sin(x_angle), cos(x_angle)
+        ) * mat3(
+            cos(y_angle), 0, sin(y_angle),
+            0, 1, 0,
+            -sin(y_angle), 0, cos(y_angle)
+        );
+        vec3 normal2 = normal * mat3(
+            1, 0, 0,
+            0, cos(x_angle), -sin(x_angle),
+            0, sin(x_angle), cos(x_angle)
+        ) * mat3(
+            cos(y_angle), 0, sin(y_angle),
+            0, 1, 0,
+            -sin(y_angle), 0, cos(y_angle)
+        );
+        
+        gl_Position = vec4(position, 1.0);
+        textcoord = uv;
+        Normal = normal2;
+        FragPos = position;
+    }
+    )";
+
+    // РСЃС…РѕРґРЅС‹Р№ РєРѕРґ С„СЂР°РіРјРµРЅС‚РЅРѕРіРѕ С€РµР№РґРµСЂР°
+    const char* BiDirectionalFragShaderSource = R"(
+        #version 330 core
+        out vec4 FragColor;
+
+        in vec2 textcoord;
+        in vec3 Normal;  
+        in vec3 FragPos;  
+  
+        uniform vec3 lightPos = vec3(0,0,-1); 
+        uniform vec3 view;
+        uniform sampler2D textureData;
+
+        void main() {
+            vec4 color1 = vec4(0.5, 0.0, 0.0,1);
+            vec4 color2 = vec4(0.5, 0.5, 0.0,1);
+
+            vec3 n2 = normalize(Normal);
+            vec3 l2 = normalize(view);
+            vec4 diff = color1 * max( dot(n2,l2),0) + color2 * max(dot(n2,-l2),0);
+            FragColor = diff * texture(textureData, textcoord);
+
+        }
+        )";
+#pragma endregion //BIDIRECTIONAL_LIGHT_SHADERS
+
+    
     sf::Window window(sf::VideoMode(600, 600), "My OpenGL window", sf::Style::Default, sf::ContextSettings(24));
     window.setVerticalSyncEnabled(true);
 
     window.setActive(true);
 
-    // Инициализация glew
+    // РРЅРёС†РёР°Р»РёР·Р°С†РёСЏ glew
     glewInit();
 
     //Object obj = Object("cube.obj");
-    //Mesh obj = Mesh("cube.obj", "image.jpg");
-    Mesh obj = Mesh("file.obj", "image.jpg");
-    //Mesh obj = Mesh("triangle.obj");
-    //Mesh obj = Mesh("FinalBaseMesh.obj");
+    //Mesh obj = Mesh("file.obj", "image.jpg");
+    //Mesh obj = Mesh("file.obj","pink.jpg", FongVertexShaderSource, FongFragShaderSource);
+    //Mesh obj = Mesh("file.obj","pink.jpg", ToonShadingVertexShaderSource, ToonShadingFragShaderSource);
+    Mesh obj = Mesh("file.obj", "pink.jpg", BiDirectionalVertexShaderSource, BiDirectionalFragShaderSource);
     //Mesh obj = Mesh();
     // lighting
-    vec3 lightPos(1.2f, 1.0f, 2.0f);
-    vec3 view(1.2f, 1.0f, 2.0f);
+    vec3 lightPos(1.2f, 1.0f, 0.0f);
+    vec3 view(0.5f, 0.0f, 0.0f);
 
     while (window.isOpen()) {
         sf::Event event;
@@ -188,7 +322,7 @@ int main()
             else if (event.type == sf::Event::Resized) {
                 glViewport(0, 0, event.size.width, event.size.height);
             }
-            // обработка нажатий клавиш
+            // РѕР±СЂР°Р±РѕС‚РєР° РЅР°Р¶Р°С‚РёР№ РєР»Р°РІРёС€
             else if (event.type == sf::Event::KeyPressed) {
                 switch (event.key.code) {
                 case (sf::Keyboard::A): obj.IncXPos(-0.05f); break;
@@ -211,320 +345,3 @@ int main()
     return 0;
 }
 
-inline Mesh::Mesh() {
-    Init();
-}
-
-inline Mesh::Mesh(std::string mesh_filename, const char* texture_filename) {
-    InitShader();
-    InitTexture(texture_filename);
-    SetupMesh(mesh_filename);
-    glEnable(GL_DEPTH_TEST);
-}
-
-inline void Mesh::Draw() {
-    glUseProgram(Program);
-    glUniform1f(Unif_posX, posX);
-    glUniform1f(Unif_posY, posY);
-    glActiveTexture(GL_TEXTURE0);
-    // Обёртка SFML на opengl функцией glBindTexture
-    sf::Texture::bind(&textureData);
-    glUniform1i(unifTexture, 0);
-    glBindVertexArray(VAO);
-
-    glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
-
-    glBindVertexArray(0);
-
-}
-
-inline void Mesh::Draw(vec3 lightpos, vec3 view) {
-    glUseProgram(Program);
-    glUniform1f(Unif_posX, posX);
-    glUniform1f(Unif_posY, posY);
-    glUniform3f(unifViewVec, view.x, view.y, view.z);
-    glActiveTexture(GL_TEXTURE0);
-    // Обёртка SFML на opengl функцией glBindTexture
-    sf::Texture::bind(&textureData);
-    glUniform1i(unifTexture, 0);
-    glBindVertexArray(VAO);
-
-    glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
-
-    glBindVertexArray(0);
-
-}
-
-inline void Mesh::IncXPos(float d) {
-    posX += d;
-}
-
-inline void Mesh::IncYPos(float d) {
-    posY += d;
-}
-
-inline void Mesh::Release() {
-    ReleaseShader();
-    ReleaseVBO();
-}
-
-// Проверка ошибок OpenGL, если есть то вывод в консоль тип ошибки
-
-inline void Mesh::checkOpenGLerror() {
-    GLenum errCode;
-    // Коды ошибок можно смотреть тут
-    // https://www.khronos.org/opengl/wiki/OpenGL_Error
-    if ((errCode = glGetError()) != GL_NO_ERROR)
-        std::cout << "OpenGl error!: " << errCode << std::endl;
-}
-
-// Функция печати лога шейдера
-
-inline void Mesh::ShaderLog(unsigned int shader)
-{
-    int infologLen = 0;
-    int charsWritten = 0;
-    char* infoLog;
-    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infologLen);
-    if (infologLen > 1)
-    {
-        infoLog = new char[infologLen];
-        if (infoLog == NULL)
-        {
-            std::cout << "ERROR: Could not allocate InfoLog buffer" << std::endl;
-            exit(1);
-        }
-        glGetShaderInfoLog(shader, infologLen, &charsWritten, infoLog);
-        std::cout << "InfoLog: " << infoLog << "\n\n\n";
-        delete[] infoLog;
-    }
-}
-
-inline void Mesh::InitVBO()
-{
-    float vertices[] = {
-        0.5f,  0.5f, 0.0f,  // top right
-        0.5f, -0.5f, 0.0f,  // bottom right
-        -0.5f, -0.5f, 0.0f,  // bottom left
-        -0.5f,  0.5f, 0.0f   // top left 
-    };
-    unsigned int indices[] = {  // note that we start from 0!
-        0, 1, 3,   // first triangle
-        1, 2, 3    // second triangle
-    };
-    glGenVertexArrays(1, &VAO);
-    glGenVertexArrays(1, &VBO);
-    glGenBuffers(1, &IBO);
-    // 1. bind Vertex Array Object
-    glBindVertexArray(VAO);
-    // 2. copy our vertices array in a vertex buffer for OpenGL to use
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    // 3. copy our index array in a element buffer for OpenGL to use
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-    // 4. then set the vertex attributes pointers
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-}
-
-inline void Mesh::InitShader() {
-    // Создаем вершинный шейдер
-    GLuint vShader = glCreateShader(GL_VERTEX_SHADER);
-    // Передаем исходный код
-    glShaderSource(vShader, 1, &VertexShaderSource, NULL);
-    // Компилируем шейдер
-    glCompileShader(vShader);
-    std::cout << "vertex shader \n";
-    ShaderLog(vShader);
-
-    // Создаем фрагментный шейдер
-    GLuint fShader = glCreateShader(GL_FRAGMENT_SHADER);
-    // Передаем исходный код
-    glShaderSource(fShader, 1, &FragShaderSource, NULL);
-    // Компилируем шейдер
-    glCompileShader(fShader);
-    std::cout << "fragment shader \n";
-    ShaderLog(fShader);
-
-    // Создаем программу и прикрепляем шейдеры к ней
-    Program = glCreateProgram();
-    glAttachShader(Program, vShader);
-    glAttachShader(Program, fShader);
-
-    // Линкуем шейдерную программу
-    glLinkProgram(Program);
-    // Проверяем статус сборки
-    int link_ok;
-    glGetProgramiv(Program, GL_LINK_STATUS, &link_ok);
-    if (!link_ok)
-    {
-        std::cout << "error attach shaders \n";
-        return;
-    }
-
-    // Вытягиваем ID атрибута вершин из собранной программы
-    Attrib_vertex = glGetAttribLocation(Program, "coord");
-    if (Attrib_vertex == -1)
-    {
-        std::cout << "could not bind attrib coord" << std::endl;
-        return;
-    }
-
-    const char* unifX_name = "positX";
-    Unif_posX = glGetUniformLocation(Program, unifX_name);
-    if (Unif_posX == -1)
-    {
-        std::cout << "could not bind uniform " << unifX_name << std::endl;
-        return;
-    }
-
-    const char* unifY_name = "positY";
-    Unif_posY = glGetUniformLocation(Program, unifY_name);
-    if (Unif_posY == -1)
-    {
-        std::cout << "could not bind uniform " << unifY_name << std::endl;
-        return;
-    }
-    unifTexture = glGetUniformLocation(Program, "textureData");
-    if (unifTexture == -1)
-    {
-        std::cout << "could not bind uniform textureData" << std::endl;
-        return;
-    }
-    unifLightPos = glGetUniformLocation(Program, "lightPos");
-    if (unifTexture == -1)
-    {
-        std::cout << "could not bind uniform lightPos" << std::endl;
-        return;
-    }
-    unifViewVec = glGetUniformLocation(Program, "view");
-    if (unifTexture == -1)
-    {
-        std::cout << "could not bind uniform view" << std::endl;
-        return;
-    }
-    checkOpenGLerror();
-}
-
-inline void Mesh::InitTexture(const char* filename)
-{
-    // Загружаем текстуру из файла
-    if (!textureData.loadFromFile(filename))
-    {
-        // Не вышло загрузить картинку
-        return;
-    }
-    // Теперь получаем openGL дескриптор текстуры
-    textureHandle = textureData.getNativeHandle();
-}
-
-inline void Mesh::Init() {
-    InitShader();
-    InitVBO();
-    glEnable(GL_DEPTH_TEST);
-}
-
-// Освобождение шейдеров
-
-inline void Mesh::ReleaseShader() {
-    // Передавая ноль, мы отключаем шейдрную программу
-    glUseProgram(0);
-    // Удаляем шейдерную программу
-    glDeleteProgram(Program);
-}
-
-// Освобождение буфера
-
-inline void Mesh::ReleaseVBO()
-{
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glDeleteBuffers(1, &VBO);
-}
-
-inline void Mesh::ReadVectorsFromFile(std::string filename) {
-    std::ifstream infile(filename);
-    std::string descr;
-    while (infile >> descr) {
-        if (descr == "v")
-        {
-            float x, y, z;
-            infile >> x >> y >> z;
-            positions.push_back({ x,y,z });
-        }
-        else if (descr == "vt")
-        {
-            float x, y;
-            infile >> x >> y;
-            uvs.push_back({ x,y });
-        }
-        else if (descr == "vn")
-        {
-            float x, y, z;
-            infile >> x >> y >> z;
-            normals.push_back({ x,y,z });
-        }
-        else if (descr == "f")
-        {
-            // get triangle
-            for (size_t i = 0; i < 3; i++)
-            {
-                int p_ind;
-                char c;
-                // read vertex index
-                infile >> p_ind;
-                infile >> c;
-                // read uv index
-                int uv_ind;
-
-                infile >> uv_ind;
-                infile >> c;
-                // read normal index
-                int n_ind;
-
-                infile >> n_ind;
-
-                vertices.push_back({ positions[p_ind - 1],normals[n_ind - 1],uvs[uv_ind - 1] });
-            }
-        }
-    }
-
-    indices = std::vector<unsigned int>(vertices.size());
-
-    for (size_t i = 0; i < indices.size(); i++)
-    {
-        indices[i] = i;
-    }
-}
-
-inline void Mesh::SetupMesh(std::string filename)
-{
-    ReadVectorsFromFile(filename);
-    // create buffers/arrays
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &IBO);
-
-    glBindVertexArray(VAO);
-    // load data into vertex buffers
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-
-    //glBufferData(GL_ARRAY_BUFFER, positions.size() * sizeof(vec3), &positions[0], GL_STATIC_DRAW);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), &vertices[0], GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
-
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, Normal));
-    // vertex texture coords
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, TexCoords));
-
-    glBindVertexArray(0);
-    checkOpenGLerror();
-}
